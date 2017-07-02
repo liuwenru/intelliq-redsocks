@@ -1,6 +1,5 @@
-# myredsocks
-使用redsocks实现全局翻墙小工具
-
+# intelliq-redsocks
+实现Linux下的全局翻墙
 # 使用方法
 
 ** 1、安装依赖包

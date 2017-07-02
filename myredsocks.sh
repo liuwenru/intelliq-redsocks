@@ -1,6 +1,6 @@
 #!/bin/bash
 
-proxy_server="47.90.89.96"
+proxy_server="192.168.149.150"
 proxy_ip=""
 proxy_port="12345"
 

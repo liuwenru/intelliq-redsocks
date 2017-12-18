@@ -3,11 +3,19 @@
 
 ## 一、使用方法
 
-1. 安装依赖包 yum install libevent libevent-deve
+1. 安装依赖包 
 
-2. 启动myredsocks ./myredsocks.sh star
+yum install libevent libevent-deve
 
-3. 选择代理模式 ./myredsocks.sh proxyall|prox
+2. 启动myredsocks 
+
+./myredsocks.sh star
+
+3. 选择代理模式 
+
+./myredsocks.sh proxyall|prox
 
 
-4. 清理代理  ./myredsocks.sh clean
+4. 清理代理  
+
+./myredsocks.sh clean

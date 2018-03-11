@@ -35,6 +35,7 @@ function stop_redsocks()
   pid=$(cat ${redsocks_pid})
   rm -rf ${redsocks_pid}
   kill -9 ${pid}
+  iptables -t nat -F
 }
 function restart_redsocks()
 {

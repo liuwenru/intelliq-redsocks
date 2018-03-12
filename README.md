@@ -18,7 +18,7 @@
 1. 使用前请安装依赖包 
 如果是`Centos`操作系统
 ```bash
-Shell> yum install libevent libevent-deve
+Shell> yum install libevent libevent-devel
 ```
 如果是`Ubuntu`操作系统
 ```bash

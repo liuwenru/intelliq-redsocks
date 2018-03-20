@@ -1,9 +1,9 @@
 #!/bin/bash
 LINE="==============================================="
 OSTYPE=$(cat /etc/os-release | grep -E "^NAME=.*" | awk -F\" '{print $2}')
-sock_server="127.0.0.1"    #socket5代理服务器
-sock_port="7070"      #socket5代理端口
-proxy_port="12345"  #redsock的监听端口
+SOCK_SERVER="127.0.0.1"    
+SOCK_PORT="7070" 
+PROXY_PORT="12345" 
 
 
 
@@ -18,12 +18,20 @@ function start_redsocks()
   rm -rf redsocks.conf
   cp redsocks.conf.example redsocks.conf 
   read -p "please tell me you sock_server:" sock_server
+  if [[ ${sock_server} != "" ]];then
+    SOCK_SERVER=$sock_server
+  fi
   read -p "please tell me you sock_port:" sock_port
+
+  if [[ ${SOCK_PORT} != "" ]];then
+    SOCK_PORT=${sock_port}
+  fi
   sed -i '18s/daemon.*/daemon = on;/g'  redsocks.conf
-  sed -i '44s/local_port.*/local_port = '${proxy_port}';/g'  redsocks.conf
-  sed -i '61s/ip.*/ip = '${sock_server}';/g'  redsocks.conf
-  sed -i '62s/port.*/port = '${sock_port}';/g'  redsocks.conf
+  sed -i '44s/local_port.*/local_port = '${PROXY_PORT}';/g'  redsocks.conf
+  sed -i '61s/ip.*/ip = '${SOCK_SERVER}';/g'  redsocks.conf
+  sed -i '62s/port.*/port = '${SOCK_PORT}';/g'  redsocks.conf
   ./redsocks -c redsocks.conf -p ${redsocks_pid}
+  iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
 }
 function stop_redsocks()
 {
@@ -66,12 +74,12 @@ do
     iptables -t nat -F
     read -p "please tell me you network:" mynetwork
     iptables -t nat -A OUTPUT -p tcp -d ${mynetwork} -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -d ${sock_server} -j RETURN
+    iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
     iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
     while read line
     do
      echo -e "\033[32m this ip[${line}] will use proxy connected .... \033[0m"
-     iptables -t nat -A OUTPUT -p tcp -d ${line} -j REDIRECT --to-ports ${proxy_port}
+     iptables -t nat -A OUTPUT -p tcp -d ${line} -j REDIRECT --to-ports ${PROXY_PORT}
     done < GFlist.txt
     echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
     iptables -t nat -nvL --line-numbers
@@ -79,12 +87,12 @@ do
     ;;
     proxyall)
     #proxy all connection
-    iptables -t nat -F
+    #iptables -t nat -F
     read -p "please tell me you network:" mynetwork
     iptables -t nat -A OUTPUT -p tcp -d ${mynetwork} -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -d ${sock_server} -j RETURN
+    iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
     iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports ${proxy_port}
+    iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports ${PROXY_PORT}
     echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
     iptables -t nat -nvL --line-numbers
     shift

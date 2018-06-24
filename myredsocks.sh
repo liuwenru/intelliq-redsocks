@@ -1,11 +1,34 @@
 #!/bin/bash
-LINE="==============================================="
-OSTYPE=$(cat /etc/os-release | grep -E "^NAME=.*" | awk -F\" '{print $2}')
+
+#check the user
+if [[ "$EUID" -ne 0 ]]; then
+	echo "==================<Attention>=================="
+        echo "Sorry, you need to run this as root"
+	echo "==============================================="
+        exit
+fi
+
+OS='cat /etc/*-release | sed -r "s/^ID=(.*)$/\\1/;tA;d;:A;s/^\"(.*)\"$/\\1/"'
+#OSTYPE=$(cat /etc/os-release | grep -E "^NAME=.*" | awk -F\" '{print $2}')
 sock_server="127.0.0.1"    #socket5代理服务器
 sock_port="7070"      #socket5代理端口
 proxy_port="12345"  #redsock的监听端口
 
-
+#Installation dependencies
+case ${OS} in
+	"centos")
+	echo "==================<Attention>=================="
+        echo "The operating system is CentOS"
+	echo "==============================================="
+	yum install libevent libevent-devel -y
+	;;
+	"ubuntu")
+	echo "==================<Attention>=================="
+        echo "The operating system is Ubuntu"
+	echo "==============================================="
+	sudo apt-get install libevent-2.0-5 libevent-dev -y
+	;;
+esac
 
 redsocks_pid="/tmp/redsocks.pid"
 function start_redsocks()

@@ -17,14 +17,22 @@ function start_redsocks()
   fi
   rm -rf redsocks.conf
   cp redsocks.conf.example redsocks.conf 
-  read -p "please tell me you sock_server:" sock_server
-  if [[ ${sock_server} != "" ]];then
-    SOCK_SERVER=$sock_server
-  fi
-  read -p "please tell me you sock_port:" sock_port
+  if [[ ! -f proxyserverinfo ]];then
+    # 本地不存在代理服务器的配置
+    read -p "please tell me you sock_server:" sock_server
+    if [[ ${sock_server} != "" ]];then
+      SOCK_SERVER=$sock_server
+    fi
+    read -p "please tell me you sock_port:" sock_port
+    if [[ ${SOCK_PORT} != "" ]];then
+      SOCK_PORT=${sock_port}
+    fi
+    echo "${SOCK_SERVER}:${SOCK_PORT}" > proxyserverinfo
+  else
+    # 本地已经存在了代理服务的配置信息,直接读取就好了
+    SOCK_SERVER=$(head -n 1 proxyserverinfo | awk -F: '{print $1}')
+    SOCK_PORT=$(head -n 1 proxyserverinfo | awk -F: '{print $2}')
 
-  if [[ ${SOCK_PORT} != "" ]];then
-    SOCK_PORT=${sock_port}
   fi
   sed -i '18s/daemon.*/daemon = on;/g'  redsocks.conf
   sed -i '44s/local_port.*/local_port = '${PROXY_PORT}';/g'  redsocks.conf
@@ -88,8 +96,11 @@ do
     proxyall)
     #proxy all connection
     #iptables -t nat -F
-    read -p "please tell me you network:" mynetwork
-    iptables -t nat -A OUTPUT -p tcp -d ${mynetwork} -j RETURN
+    #read -p "please tell me you network:" mynetwork
+    for i in $(ip route show| awk '{print $1}'|grep -v default)
+    do
+        iptables -t nat -A OUTPUT -p tcp -d ${i} -j RETURN
+    done
     iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
     iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
     iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports ${PROXY_PORT}

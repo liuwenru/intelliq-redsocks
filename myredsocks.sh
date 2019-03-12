@@ -1,15 +1,13 @@
 #!/bin/bash
 
+
+SUDO=""
 #check the user
 if [[ "$EUID" -ne 0 ]]; then
-	echo "==================<Attention>=================="
-        echo "Sorry, you need to run this as root"
-	echo "==============================================="
-        exit
+  SUDO="sudo"
 fi
 
 OS='cat /etc/*-release | sed -r "s/^ID=(.*)$/\\1/;tA;d;:A;s/^\"(.*)\"$/\\1/"'
-#OSTYPE=$(cat /etc/os-release | grep -E "^NAME=.*" | awk -F\" '{print $2}')
 SOCK_SERVER="127.0.0.1"    #socket5代理服务器
 SOCK_PORT="7070"      #socket5代理端口
 PROXY_PORT="12345"  #redsock的监听端口
@@ -20,13 +18,13 @@ case ${OS} in
 	echo "==================<Attention>=================="
         echo "The operating system is CentOS"
 	echo "==============================================="
-	yum install libevent libevent-devel -y
+	${SUDO} yum install libevent libevent-devel -y
 	;;
 	"ubuntu")
 	echo "==================<Attention>=================="
         echo "The operating system is Ubuntu"
 	echo "==============================================="
-	sudo apt-get install libevent-2.0-5 libevent-dev -y
+	${SUDO} apt-get install libevent-2.0-5 libevent-dev -y
 	;;
 esac
 
@@ -61,8 +59,8 @@ function start_redsocks()
   sed -i '44s/local_port.*/local_port = '${PROXY_PORT}';/g'  redsocks.conf
   sed -i '61s/ip.*/ip = '${SOCK_SERVER}';/g'  redsocks.conf
   sed -i '62s/port.*/port = '${SOCK_PORT}';/g'  redsocks.conf
-  ./redsocks -c redsocks.conf -p ${redsocks_pid}
-  iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
+  ${SUDO} ./redsocks -c redsocks.conf -p ${redsocks_pid}
+  ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
 }
 function stop_redsocks()
 {
@@ -72,72 +70,74 @@ function stop_redsocks()
     return 0
   fi
   pid=$(cat ${redsocks_pid})
-  rm -rf ${redsocks_pid}
-  kill -9 ${pid}
-  iptables -t nat -F
+  ${SUDO} rm -rf ${redsocks_pid}
+  ${SUDO} kill -9 ${pid}
+  ${SUDO} iptables -t nat -F
 }
 function restart_redsocks()
 {
   stop_redsocks
   start_redsocks 
 }
+function set_no_proxy(){
+  # set no need proxy
+  while read line
+  do
+   echo -e "\033[32m this ip[${line}] will no connected .... \033[0m"
+   ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${line} -j RETURN
+  done < NoProxy.txt
+}
 until [ $# -eq 0 ]
 do
   case $1 in
     start)
-    start_redsocks
+      start_redsocks
     shift
     ;;
     stop)
-    stop_redsocks
+      stop_redsocks
     shift
     ;;
     restart)
-    restart_redsocks
+      restart_redsocks
     shift
     ;;
     clean)
-    iptables -t nat -F 
+      ${SUDO} iptables -t nat -F 
     shift
     ;;
     proxy)
-    #proxy the fwlist.txt
-    iptables -t nat -F
-    read -p "please tell me you network:" mynetwork
-    iptables -t nat -A OUTPUT -p tcp -d ${mynetwork} -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
-    while read line
-    do
-     echo -e "\033[32m this ip[${line}] will use proxy connected .... \033[0m"
-     iptables -t nat -A OUTPUT -p tcp -d ${line} -j REDIRECT --to-ports ${PROXY_PORT}
-    done < GFlist.txt
-    echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
-    iptables -t nat -nvL --line-numbers
+      #proxy the fwlist.txt
+      ${SUDO} iptables -t nat -F
+      read -p "please tell me you network:" mynetwork
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${mynetwork} -j RETURN
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
+      while read line
+      do
+        echo -e "\033[32m this ip[${line}] will use proxy connected .... \033[0m"
+        ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${line} -j REDIRECT --to-ports ${PROXY_PORT}
+      done < GFlist.txt
+      echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
+      ${SUDO} iptables -t nat -nvL --line-numbers
     shift
     ;;
     proxyall)
-    #proxy all connection
-    #iptables -t nat -F
-    #read -p "please tell me you network:" mynetwork
-    for i in $(ip route show| awk '{print $1}'|grep -v default)
-    do
-        iptables -t nat -A OUTPUT -p tcp -d ${i} -j RETURN
-    done
-    iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
-    iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports ${PROXY_PORT}
-    echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
-    iptables -t nat -nvL --line-numbers
+      #proxy all connection
+      for i in $(ip route show| awk '{print $1}'|grep -v default)
+      do
+          ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${i} -j RETURN
+      done
+      set_no_proxy
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -d ${SOCK_SERVER} -j RETURN
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
+      ${SUDO} iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports ${PROXY_PORT}
+      echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
+      ${SUDO} iptables -t nat -nvL --line-numbers
     shift
     ;;
     stop)
     #clean all iptables
-    shift
-    ;;
-    install)
-    echo "install the redsocket"
-    install_redsocks
     shift
     ;;
     *)

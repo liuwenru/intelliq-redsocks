@@ -1,0 +1,15 @@
+[Unit]
+Description=Transparent redirector of any TCP connection to proxy using your firewall
+
+[Service]
+Type=forking
+PIDFile=/tmp/redsocks.pid
+EnvironmentFile=/etc/redsocksenv
+User=root
+ExecStartPre= iptables -t nat -A OUTPUT -p tcp -d SOCK_SERVER -j RETURN
+ExecStart=/usr/bin/redsocks -c /etc/redsocks.conf -p /tmp/redsocks.pid
+ExecStopPost=/bin/rm /tmp/redsocks.pid && iptables -t nat -F
+Restart=on-abort
+
+[Install]
+WantedBy=multi-user.target

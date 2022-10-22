@@ -8,29 +8,22 @@
 
 # 一、使用方法
 
-本人已经针对`redsocks`的一个稳定版本编译好了一个直接可以运行的二进制文件，在`Centos`上可以直接使用。如果想编译其他`Linux`版本上的请按照`redsocks`官方文档操作
+本人已经针对`redsocks`的一个稳定版本编译好了一个直接可以运行的二进制文件，使用`alpine musl gilbc`编译，因此可以不需要安装依赖直接使用，提供了`x86`和`aarch64`两个版本，使用方法如下
 
-1. 使用前请安装依赖包
-   如果是`Centos`操作系统
-
-```bash
-Shell> yum install libevent libevent-devel
-```
-
-如果是`Ubuntu`操作系统
+1. 安装
 
 ```bash
-Shell> sudo apt-get install libevent-2.0-5 libevent-dev
-
-```
-
-2. 启动 myredsocks
-
-```bash
-Shell > ./myredsocks.sh start #启动服务进程
-start the redsocks........................
+Shell> git clone 本仓库
+Shell> ./install.sh
 please tell me you sock_server:127.0.0.1 #输入socket5代理服务器的地址
 please tell me you sock_port:7070        #输入socket5代理服务器的端口
+```
+
+2. 启动 redsocks
+
+```bash
+Shell > service redsocks start
+
 ```
 
 3. 选择代理模式
@@ -38,8 +31,8 @@ please tell me you sock_port:7070        #输入socket5代理服务器的端口
 **全局代理模式**
 
 ```bash
-./myredsocks.sh proxyall      #启动全局代理模式，此模式下将代理所有的访问
-please tell me you network:192.168.188.0/24             #输入你当前主机的网络信息，因为该网段的机器是不需要翻墙访问的
+Shell>   proxyall      #启动全局代理模式，此模式下将代理所有的访问
+
  your iptabls OUTPUT chain like this....
  Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
  num   pkts bytes target     prot opt in     out     source               destination
@@ -63,8 +56,8 @@ please tell me you network:192.168.188.0/24             #输入你当前主机�
 该模式下只代理`GFlist.txt`中指定的主机
 
 ```bash
-Shell> ./myredsocks.sh proxy
-please tell me you network:192.168.188.0/24   #输入你的网络信息，同全局代理模式一样，同网段的机器不要翻墙
+Shell> proxy
+
 this ip[216.58.194.99] will use proxy connected ....
 this ip[180.97.33.107] will use proxy connected ....
 your iptabls OUTPUT chain like this....
@@ -91,8 +84,8 @@ your iptabls OUTPUT chain like this....
 
 ```bash
 
-Shell> ./myredsocks.sh clean                  #清理所有的代理模式
-Shell> ./myredsocks.sh stop                   #关闭代理
+Shell> iptable -t nat -F                  #清理所有的代理模式
+Shell> service redsocks start             #关闭代理
 
 
 ```

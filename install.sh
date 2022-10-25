@@ -43,4 +43,4 @@ systemctl daemon-reload
 /bin/cp GFlist.txt /etc/GFlist.txt
 
 /bin/cp -rf proxy.sh /usr/local/bin/proxy && chmod +x /usr/local/bin/proxy && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxy && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxy
-/bin/cp -rf proxyall.sh /usr/local/bin/proxyall && chmod +x /usr/local/bin/proxyall
+/bin/cp -rf proxyall.sh /usr/local/bin/proxyall && chmod +x /usr/local/bin/proxyall && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxyall && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxyall

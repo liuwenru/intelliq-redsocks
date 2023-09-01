@@ -1,0 +1,64 @@
+#!/bin/bash
+# /etc/init.d/redsocks-service
+
+### BEGIN INIT INFO
+# Provides:          redsocks-service
+# Required-Start:    $remote_fs $network
+# Required-Stop:     $remote_fs $network
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: Transparent redirector of any TCP connection to proxy using your firewall
+# Description:       Redirects TCP connections to a proxy server using iptables and redsocks.
+### END INIT INFO
+
+# Define variables
+DESC="Transparent redirector of any TCP connection to proxy using your firewall"
+PIDFILE="/tmp/redsocks.pid"
+ENVFILE="/etc/redsocksenv"
+REDSOCKS_BIN="/usr/bin/redsocks"
+REDSOCKS_CONF="/etc/redsocks.conf"
+
+# Exit if the binary or configuration file doesn't exist
+[ -x "$REDSOCKS_BIN" ] || exit 1
+[ -f "$REDSOCKS_CONF" ] || exit 1
+
+# Read environment variables from /etc/redsocksenv
+if [ -f "$ENVFILE" ]; then
+    . "$ENVFILE"
+fi
+
+case "$1" in
+  start)
+    echo "Starting redsocks..."
+    # Add iptables rule to skip local traffic
+    iptables -t nat -A OUTPUT -p tcp -d "$SOCK_SERVER" -j RETURN
+    # Start redsocks in the background
+    "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE"
+    ;;
+  stop)
+    echo "Stopping redsocks..."
+    # Remove iptables rule and stop redsocks
+    iptables -t nat -F
+    [ -f "$PIDFILE" ] && kill -TERM $(cat "$PIDFILE")
+    [ -f "$PIDFILE" ] && rm -f "$PIDFILE"
+    ;;
+  restart)
+    $0 stop
+    sleep 2
+    $0 start
+    ;;
+  status)
+    echo "Checking redsocks status..."
+    if [ -f "$PIDFILE" ]; then
+      echo "redsocks is running (PID $(cat "$PIDFILE"))"
+    else
+      echo "redsocks is not running."
+    fi
+    ;;
+  *)
+    echo "Usage: $0 {start|stop|restart|status}"
+    exit 1
+    ;;
+esac
+
+exit 0

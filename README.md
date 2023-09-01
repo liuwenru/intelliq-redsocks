@@ -84,8 +84,8 @@ your iptabls OUTPUT chain like this....
 
 ```bash
 
-Shell> iptable -t nat -F                  #清理所有的代理模式
-Shell> service redsocks start             #关闭代理
+Shell> iptables -t nat -F                  #清理所有的代理模式
+Shell> service redsocks stop             #关闭代理
 
 
 ```

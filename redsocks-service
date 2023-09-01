@@ -31,7 +31,7 @@ case "$1" in
   start)
     echo "Starting redsocks..."
     # Add iptables rule to skip local traffic
-    iptables -t nat -A OUTPUT -p tcp -d "$SOCK_SERVER" -j RETURN
+    iptables -t nat -A OUTPUT -p tcp -d SOCK_SERVER -j RETURN
     # Start redsocks in the background
     "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE"
     ;;

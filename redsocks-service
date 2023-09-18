@@ -13,7 +13,7 @@
 
 # Define variables
 DESC="Transparent redirector of any TCP connection to proxy using your firewall"
-PIDFILE="/var/run/redsocks.pid"  # 修改PID文件的位置，通常在/var/run中
+PIDFILE="/var/run/redsocks.pid" 
 REDSOCKS_BIN="/usr/bin/redsocks"
 REDSOCKS_CONF="/etc/redsocks.conf"
 ENVFILE="/etc/redsocksenv"
@@ -34,6 +34,7 @@ is_redsocks_running() {
         if ps -p "$pid" > /dev/null; then
             return 0  # Process is running
         else
+            rm -f "$PIDFILE"  # Remove stale PID file
             return 1  # Process is not running
         fi
     else
@@ -56,7 +57,7 @@ case "$1" in
     # Stop redsocks if it's running
     if is_redsocks_running; then
         local pid=$(cat "$PIDFILE")
-        kill -TERM "$pid"
+        kill -9 "$pid"  # Forcefully kill the process
         rm -f "$PIDFILE"
     fi
     ;;

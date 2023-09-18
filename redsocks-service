@@ -13,10 +13,10 @@
 
 # Define variables
 DESC="Transparent redirector of any TCP connection to proxy using your firewall"
-PIDFILE="/tmp/redsocks.pid"
-ENVFILE="/etc/redsocksenv"
+PIDFILE="/var/run/redsocks.pid"  # 修改PID文件的位置，通常在/var/run中
 REDSOCKS_BIN="/usr/bin/redsocks"
 REDSOCKS_CONF="/etc/redsocks.conf"
+ENVFILE="/etc/redsocksenv"
 
 # Exit if the binary or configuration file doesn't exist
 [ -x "$REDSOCKS_BIN" ] || exit 1
@@ -27,20 +27,39 @@ if [ -f "$ENVFILE" ]; then
     . "$ENVFILE"
 fi
 
+# Function to check if redsocks is running
+is_redsocks_running() {
+    if [ -f "$PIDFILE" ]; then
+        local pid=$(cat "$PIDFILE")
+        if ps -p "$pid" > /dev/null; then
+            return 0  # Process is running
+        else
+            rm -f "$PIDFILE"  # Remove stale PID file
+            return 1  # Process is not running
+        fi
+    else
+        return 1  # Process is not running
+    fi
+}
+
 case "$1" in
   start)
     echo "Starting redsocks..."
     # Add iptables rule to skip local traffic
-    iptables -t nat -A OUTPUT -p tcp -d SOCK_SERVER -j RETURN
+    iptables -t nat -A OUTPUT -p tcp -d "$SOCK_SERVER" -j RETURN
     # Start redsocks in the background
-    "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE"
+    "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE" &
     ;;
   stop)
     echo "Stopping redsocks..."
-    # Remove iptables rule and stop redsocks
+    # Remove iptables rule
     iptables -t nat -F
-    [ -f "$PIDFILE" ] && kill -TERM $(cat "$PIDFILE")
-    [ -f "$PIDFILE" ] && rm -f "$PIDFILE"
+    # Stop redsocks if it's running
+    if is_redsocks_running; then
+        local pid=$(cat "$PIDFILE")
+        kill -9 "$pid"  # Forcefully kill the process
+        rm -f "$PIDFILE"
+    fi
     ;;
   restart)
     $0 stop
@@ -49,8 +68,8 @@ case "$1" in
     ;;
   status)
     echo "Checking redsocks status..."
-    if [ -f "$PIDFILE" ]; then
-      echo "redsocks is running (PID $(cat "$PIDFILE"))"
+    if is_redsocks_running; then
+      echo "redsocks is running."
     else
       echo "redsocks is not running."
     fi

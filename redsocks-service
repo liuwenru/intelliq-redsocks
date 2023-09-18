@@ -34,7 +34,6 @@ is_redsocks_running() {
         if ps -p "$pid" > /dev/null; then
             return 0  # Process is running
         else
-            rm -f "$PIDFILE"  # Remove stale PID file
             return 1  # Process is not running
         fi
     else
@@ -46,18 +45,18 @@ case "$1" in
   start)
     echo "Starting redsocks..."
     # Add iptables rule to skip local traffic
-    iptables -t nat -A OUTPUT -p tcp -d "$SOCK_SERVER" -j RETURN
+    iptables -t nat -A OUTPUT -p tcp -d SOCK_SERVER -j RETURN
     # Start redsocks in the background
-    "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE" &
+    "$REDSOCKS_BIN" -c "$REDSOCKS_CONF" -p "$PIDFILE" 
     ;;
   stop)
     echo "Stopping redsocks..."
-    # Remove iptables rule
+    # Remove iptables rule and stop redsocks
     iptables -t nat -F
     # Stop redsocks if it's running
     if is_redsocks_running; then
         local pid=$(cat "$PIDFILE")
-        kill -9 "$pid"  # Forcefully kill the process
+        kill -TERM "$pid"
         rm -f "$PIDFILE"
     fi
     ;;

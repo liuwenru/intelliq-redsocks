@@ -56,7 +56,7 @@ case "$1" in
     iptables -t nat -F
     # Stop redsocks if it's running
     if is_redsocks_running; then
-        local pid=$(cat "$PIDFILE")
+        pid=$(cat "$PIDFILE")
         kill -9 "$pid"  # Forcefully kill the process
         rm -f "$PIDFILE"
     fi
@@ -72,6 +72,7 @@ case "$1" in
       echo "redsocks is running."
     else
       echo "redsocks is not running."
+      exit 1
     fi
     ;;
   *)

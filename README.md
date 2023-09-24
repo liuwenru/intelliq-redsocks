@@ -14,7 +14,7 @@
 
 ```bash
 Shell> git clone 本仓库
-Shell> ./install.sh
+Shell> ./install_redsocks.sh
 please tell me you sock_server:127.0.0.1 #输入socket5代理服务器的地址
 please tell me you sock_port:7070        #输入socket5代理服务器的端口
 ```

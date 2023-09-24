@@ -1,0 +1,39 @@
+global {
+	server_port=${PROXY_DNS_PORT};  # 监听端口
+	perm_cache=1024;
+	cache_dir="/var/cache/pdnsd";
+	run_as="pdnsd";
+	server_ip = 127.0.0.1; # Use eth0 here if you want to allow other
+                           # machines on your network to query pdnsd.
+	status_ctl = on;
+	query_method=tcp_only;  # 使用 TCP 方式去查询 DNS 服务器
+	min_ttl=15m;       # Retain cached entries at least 15 minutes.
+	max_ttl=1w;        # One week.
+	timeout=10;        # Global timeout option (10 seconds).
+	neg_domain_pol=on;
+	udpbufsize=1024;   # Upper limit on the size of UDP messages.
+}
+server {
+        label = "googledns";
+        ip = 8.8.8.8;
+        timeout = 5;
+        uptest = query;
+        interval = 30m;      // Test every half hour.
+        ping_timeout = 300;  // 30 seconds.
+        purge_cache = off;
+        exclude = .localdomain;
+        policy = included;
+        preset = off;
+}
+source {
+    owner=localhost;
+    serve_aliases=on;
+    file="/etc/hosts";
+}
+rr {
+	name=localhost;
+	reverse=on;
+	a=127.0.0.1;
+	owner=localhost;
+	soa=localhost,root.localhost,42,86400,900,86400,86400;
+}

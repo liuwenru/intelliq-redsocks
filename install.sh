@@ -40,6 +40,7 @@ systemctl daemon-reload
 
 #  cpy proxy set
 /bin/cp NoProxy.txt /etc/NoProxy.txt
+/bin/cp NoProxyDoamin.txt /etc/NoProxyDoamin.txt
 /bin/cp GFlist.txt /etc/GFlist.txt
 
 /bin/cp -rf proxy.sh /usr/local/bin/proxy && chmod +x /usr/local/bin/proxy && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxy && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxy

@@ -1,0 +1,4 @@
+obs.cn-east-3.myhuaweicloud.com
+oa.epoint.com.cn
+fdoc.epoint.com.cn
+mirrors.aliyun.com

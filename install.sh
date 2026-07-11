@@ -1,47 +1,53 @@
 #!/bin/bash
+set -euo pipefail
+
+if [[ $EUID -ne 0 ]]; then
+    echo "must run as root" >&2
+    exit 1
+fi
+
+SOCK_SERVER="127.0.0.1"
+SOCK_PORT="7070"
+PROXY_PORT="12345"
+
+REDSDOCKS_ETC="/etc/redsocks"
+PROXYSERVERINFO="${REDSDOCKS_ETC}/proxyserverinfo"
+REDSDOCKS_CONF="${REDSDOCKS_ETC}/redsocks.conf"
+NO_PROXY_FILE="${REDSDOCKS_ETC}/NoProxy.txt"
+
+mkdir -p "${REDSDOCKS_ETC}"
+
 binfile="redsocks_$(uname --machine)"
-cp ${binfile} /usr/bin/redsocks
-if [[ ! -d /etc/redsocksenv ]]; then
-    touch /etc/redsocksenv
-fi
+cp "${binfile}" /usr/bin/redsocks
 
-SOCK_SERVER="127.0.0.1" #socket5代理服务器
-SOCK_PORT="7070"        #socket5代理端口
-PROXY_PORT="12345"      #redsock的监听端口
+cp redsocks.conf.example "${REDSDOCKS_CONF}"
 
-rm -rf redsocks.conf
-cp redsocks.conf.example /etc/redsocks.conf
-if [[ ! -f proxyserverinfo ]]; then
-    # 本地不存在代理服务器的配置
-    read -p "please tell me you sock_server:" sock_server
-    if [[ ${sock_server} != "" ]]; then
-        SOCK_SERVER=$sock_server
+if [[ ! -f "${PROXYSERVERINFO}" ]]; then
+    read -r -p "please tell me you sock_server:" sock_server
+    if [[ -n "${sock_server}" ]]; then
+        SOCK_SERVER="${sock_server}"
     fi
-    read -p "please tell me you sock_port:" sock_port
-    if [[ ${SOCK_PORT} != "" ]]; then
-        SOCK_PORT=${sock_port}
+    read -r -p "please tell me you sock_port:" sock_port
+    if [[ -n "${sock_port}" ]]; then
+        SOCK_PORT="${sock_port}"
     fi
-    echo "${SOCK_SERVER}:${SOCK_PORT}" >proxyserverinfo
+    echo "${SOCK_SERVER}:${SOCK_PORT}" > "${PROXYSERVERINFO}"
 else
-    # 本地已经存在了代理服务的配置信息,直接读取就好了
-    SOCK_SERVER=$(head -n 1 proxyserverinfo | awk -F: '{print $1}')
-    SOCK_PORT=$(head -n 1 proxyserverinfo | awk -F: '{print $2}')
-
+    SOCK_SERVER=$(head -n 1 "${PROXYSERVERINFO}" | awk -F: '{print $1}')
+    SOCK_PORT=$(head -n 1 "${PROXYSERVERINFO}" | awk -F: '{print $2}')
 fi
 
-cp redsocks.service /lib/systemd/system/
-sed -i '18s/daemon.*/daemon = on;/g' /etc/redsocks.conf
-sed -i '44s/local_port.*/local_port = '${PROXY_PORT}';/g' /etc/redsocks.conf
-sed -i '61s/ip.*/ip = '${SOCK_SERVER}';/g' /etc/redsocks.conf
-sed -i '62s/port.*/port = '${SOCK_PORT}';/g' /etc/redsocks.conf
-sed -i 's/SOCK_SERVER/'${SOCK_SERVER}'/g' /lib/systemd/system/redsocks.service
+sed -i -E "0,/^\s*daemon\s*=.*/{s|^\s*daemon\s*=.*|daemon = on;|}" "${REDSDOCKS_CONF}"
+sed -i -E "0,/^\s*local_port\s*=.*/{s|^\s*local_port\s*=.*|local_port = ${PROXY_PORT};|}" "${REDSDOCKS_CONF}"
+sed -i -E "0,/^\s*ip\s*=.*/{s|^\s*ip\s*=.*|ip = ${SOCK_SERVER};|}" "${REDSDOCKS_CONF}"
+sed -i -E "0,/^\s*port\s*=.*/{s|^\s*port\s*=.*|port = ${SOCK_PORT};|}" "${REDSDOCKS_CONF}"
 
+cp redsocks.service /etc/systemd/system/
 systemctl daemon-reload
 
-#  cpy proxy set
-/bin/cp NoProxy.txt /etc/NoProxy.txt
-/bin/cp NoProxyDoamin.txt /etc/NoProxyDoamin.txt
-/bin/cp GFlist.txt /etc/GFlist.txt
+( echo "${SOCK_SERVER}"; cat NoProxy.txt ) > "${NO_PROXY_FILE}"
 
-/bin/cp -rf proxy.sh /usr/local/bin/proxy && chmod +x /usr/local/bin/proxy && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxy && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxy
-/bin/cp -rf proxyall.sh /usr/local/bin/proxyall && chmod +x /usr/local/bin/proxyall && sed -i 's/SED_SOCK_SERVER/'${SOCK_SERVER}'/g' /usr/local/bin/proxyall && sed -i 's/SED_PROXY_PORT/'${PROXY_PORT}'/g' /usr/local/bin/proxyall
+/bin/cp -rf proxyall.sh /usr/local/bin/proxyall
+chmod +x /usr/local/bin/proxyall
+sed -i "s/SED_SOCK_SERVER/${SOCK_SERVER}/g" /usr/local/bin/proxyall
+sed -i "s/SED_PROXY_PORT/${PROXY_PORT}/g" /usr/local/bin/proxyall

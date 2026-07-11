@@ -1,20 +1,38 @@
 #!/bin/bash
+set -euo pipefail
 
-function set_no_proxy() {
-    # set no need proxy
-    while read line; do
-        echo -e "\033[32m this ip[${line}] will no connected .... \033[0m"
-        iptables -t nat -A OUTPUT -p tcp -d ${line} -j RETURN
-    done </etc/NoProxy.txt
+SOCK_SERVER="${SOCK_SERVER:-SED_SOCK_SERVER}"
+PROXY_PORT="${PROXY_PORT:-SED_PROXY_PORT}"
+SUDO="${SUDO:-}"
+NO_PROXY_FILE="/etc/redsocks/NoProxy.txt"
+
+flush_output() {
+    ${SUDO} iptables -t nat -F OUTPUT
 }
 
-#proxy all connection
-for i in $(ip route show | awk '{print $1}' | grep -v default); do
-    iptables -t nat -A OUTPUT -p tcp -d ${i} -j RETURN
-done
-set_no_proxy
-iptables -t nat -A OUTPUT -p tcp -d SED_SOCK_SERVER -j RETURN
-iptables -t nat -A OUTPUT -p tcp -d 127.0.0.1 -j RETURN
-iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports SED_PROXY_PORT
-echo -e "\033[32m your iptabls OUTPUT chain like this.... \033[0m"
-iptables -t nat -nvL --line-numbers
+load_no_proxy() {
+    if [[ ! -f "${NO_PROXY_FILE}" ]]; then
+        echo "warn: ${NO_PROXY_FILE} not found"
+        return 0
+    fi
+    while IFS= read -r line || [[ -n "${line}" ]]; do
+        [[ -z "${line}" || "${line}" =~ ^[[:space:]]*# ]] && continue
+        echo -e "\033[32m no-proxy: ${line}\033[0m"
+        ${SUDO} iptables -t nat -A OUTPUT -p tcp -d "${line}" -j RETURN
+    done < "${NO_PROXY_FILE}"
+}
+
+load_local_routes() {
+    while IFS= read -r subroute; do
+        [[ -z "${subroute}" ]] && continue
+        ${SUDO} iptables -t nat -A OUTPUT -p tcp -d "${subroute}" -j RETURN
+    done < <(ip -o route show | awk '{print $1}' | grep -v '^default$')
+}
+
+flush_output
+load_no_proxy
+load_local_routes
+${SUDO} iptables -t nat -A OUTPUT -p tcp -j REDIRECT --to-ports "${PROXY_PORT}"
+
+echo -e "\033[32m iptables OUTPUT chain:\033[0m"
+${SUDO} iptables -t nat -nvL OUTPUT --line-numbers

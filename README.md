@@ -26,68 +26,54 @@ Shell > service redsocks start
 
 ```
 
-3. 选择代理模式
-
-**全局代理模式**
+3. 启动全局代理
 
 ```bash
-Shell>   proxyall      #启动全局代理模式，此模式下将代理所有的访问
+Shell> proxyall      #启动全局代理模式，此模式下将代理所有的访问
 
- your iptabls OUTPUT chain like this....
- Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
- num   pkts bytes target     prot opt in     out     source               destination
-
- Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
- num   pkts bytes target     prot opt in     out     source               destination
-
+ iptables OUTPUT chain:
  Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  num   pkts bytes target     prot opt in     out     source               destination
- 1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.0/24
+ 1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.8
  2        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
- 3        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
- 4        0     0 REDIRECT   tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            redir ports 12345
-
- Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
- num   pkts bytes target     prot opt in     out     source               destination
-```
-
-**代理指定主机**
-
-该模式下只代理`GFlist.txt`中指定的主机
-
-```bash
-Shell> proxy
-
-this ip[216.58.194.99] will use proxy connected ....
-this ip[180.97.33.107] will use proxy connected ....
-your iptabls OUTPUT chain like this....
-   Chain PREROUTING (policy ACCEPT 0 packets, 0 bytes)
-   num   pkts bytes target     prot opt in     out     source               destination
-
-   Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
-   num   pkts bytes target     prot opt in     out     source               destination
-
-   Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
-   num   pkts bytes target     prot opt in     out     source               destination
-   1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.0/24
-   2        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
-   3        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
-   4        0     0 REDIRECT   tcp  --  *      *       0.0.0.0/0            216.58.194.99        redir ports 12345
-   5        0     0 REDIRECT   tcp  --  *      *       0.0.0.0/0            180.97.33.107        redir ports 12345
-
-   Chain POSTROUTING (policy ACCEPT 0 packets, 0 bytes)
-   num   pkts bytes target     prot opt in     out     source               destination
-
+ 3        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.0.0/16
+ 4        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            172.16.0.0/16
+ 5        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.0/24
+ 6        0     0 REDIRECT   tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            redir ports 12345
 ```
 
 4. 清理代理与关闭代理
 
 ```bash
 
-Shell> iptable -t nat -F                  #清理所有的代理模式
-Shell> service redsocks start             #关闭代理
+Shell> iptables -t nat -F OUTPUT        #清理所有的代理规则
+Shell> service redsocks stop            #关闭 redsocks 进程
 
 
+```
+
+# 关于代理范围
+
+`proxyall` 会按以下顺序在 iptables nat 表 OUTPUT 链上添加规则：
+
+1. `/etc/redsocks/NoProxy.txt` 中列出的 IP/CIDR（由 `install.sh` 自动写入，第一行为 SOCK_SERVER）
+2. 本机直连路由表中的子网
+3. 兜底：所有 TCP 流量 `REDIRECT` 到 redsocks 监听端口
+
+如需新增直连条目，编辑 `/etc/redsocks/NoProxy.txt` 后重新执行 `proxyall` 即可。
+
+# 运行时文件分布
+
+```
+/etc/redsocks/
+├── redsocks.conf          # redsocks 配置文件
+├── NoProxy.txt            # 直连 IP/CIDR 列表（第一行是 SOCK_SERVER）
+└── proxyserverinfo        # 上次安装时的 SOCK_SERVER:SOCK_PORT 记录
+
+/etc/systemd/system/redsocks.service   # systemd unit 文件
+/run/redsocks.pid                       # redsocks 进程 PID 文件
+/usr/bin/redsocks                       # redsocks 二进制
+/usr/local/bin/proxyall                 # 全局代理快捷命令
 ```
 
 # 静态编译方法

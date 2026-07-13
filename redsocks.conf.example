@@ -73,22 +73,21 @@ redudp {
 	// `local_ip' should not be 0.0.0.0 as it's also used for outgoing
 	// packets that are sent as replies - and it should be fixed
 	// if we want NAT to work properly.
-	local_ip = 0.0.0.0;
-	local_port = 10053;
+	local_ip = 127.0.0.1;
+	local_port = SED_UDP_PROXY_PORT;
 
 	// `ip' and `port' of socks5 proxy server.
-	ip = 10.0.0.1;
-	port = 1080;
-	login = username;
-	password = pazzw0rd;
+	ip = SED_SOCK_SERVER;
+	port = SED_SOCK_PORT;
+	// login = username;
+	// password = pazzw0rd;
 
 	// kernel does not give us this information, so we have to duplicate it
 	// in both iptables rules and configuration file.  By the way, you can
 	// set `local_ip' to 127.45.67.89 if you need more than 65535 ports to
 	// forward ;-)
 	// This limitation may be relaxed in future versions using contrack-tools.
-	dest_ip = 8.8.8.8;
-	dest_port = 53;
+	// dest_ip and dest_port must remain unset for TPROXY mode.
 
 	udp_timeout = 30;
 	udp_timeout_stream = 180;

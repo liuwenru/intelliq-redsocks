@@ -34,6 +34,11 @@ Shell> proxyall      #启动全局代理模式，此模式下将代理所有的�
  iptables OUTPUT chain:
  Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
  num   pkts bytes target     prot opt in     out     source               destination
+ 1        0     0 REDSOCKS_OUTPUT tcp -- *    *       0.0.0.0/0            0.0.0.0/0
+
+ iptables REDSOCKS_OUTPUT chain:
+ Chain REDSOCKS_OUTPUT (1 references)
+ num   pkts bytes target     prot opt in     out     source               destination
  1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.8
  2        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
  3        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.0.0/16
@@ -46,7 +51,9 @@ Shell> proxyall      #启动全局代理模式，此模式下将代理所有的�
 
 ```bash
 
-Shell> iptables -t nat -F OUTPUT        #清理所有的代理规则
+Shell> iptables -t nat -D OUTPUT -p tcp -j REDSOCKS_OUTPUT
+Shell> iptables -t nat -F REDSOCKS_OUTPUT
+Shell> iptables -t nat -X REDSOCKS_OUTPUT
 Shell> service redsocks stop            #关闭 redsocks 进程
 
 
@@ -54,13 +61,14 @@ Shell> service redsocks stop            #关闭 redsocks 进程
 
 # 关于代理范围
 
-`proxyall` 会按以下顺序在 iptables nat 表 OUTPUT 链上添加规则：
+`proxyall` 会在 iptables nat 表中创建 `REDSOCKS_OUTPUT` 链，并由 `OUTPUT` 链引用。代理规则按以下顺序写入 `REDSOCKS_OUTPUT`：
 
 1. `/etc/redsocks/NoProxy.txt` 中列出的 IP/CIDR（由 `install.sh` 自动写入，第一行为 SOCK_SERVER）
 2. 本机直连路由表中的子网
 3. 兜底：所有 TCP 流量 `REDIRECT` 到 redsocks 监听端口
 
 如需新增直连条目，编辑 `/etc/redsocks/NoProxy.txt` 后重新执行 `proxyall` 即可。
+重复执行时只会清空并重建 `REDSOCKS_OUTPUT`，不会清空 `OUTPUT` 或重复添加引用。升级前由旧版脚本直接写入 `OUTPUT` 的规则不会被自动删除，需要手动清理一次。
 
 # 运行时文件分布
 

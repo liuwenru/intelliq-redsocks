@@ -7,7 +7,9 @@ PIDFile=/run/redsocks.pid
 User=root
 ExecStart=/usr/bin/redsocks -c /etc/redsocks/redsocks.conf -p /run/redsocks.pid
 ExecStopPost=/bin/rm -f /run/redsocks.pid
-ExecStopPost=/usr/sbin/iptables -t nat -F OUTPUT
+ExecStopPost=-/usr/sbin/iptables -t nat -D OUTPUT -p tcp -j REDSOCKS_OUTPUT
+ExecStopPost=-/usr/sbin/iptables -t nat -F REDSOCKS_OUTPUT
+ExecStopPost=-/usr/sbin/iptables -t nat -X REDSOCKS_OUTPUT
 Restart=on-abort
 
 [Install]

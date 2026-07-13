@@ -37,7 +37,7 @@ Shell> proxyall      #启动全局代理模式，此模式下将代理所有的�
  1        0     0 REDSOCKS_OUTPUT tcp -- *    *       0.0.0.0/0            0.0.0.0/0
 
  iptables REDSOCKS_OUTPUT chain:
- Chain REDSOCKS_OUTPUT (1 references)
+ Chain REDSOCKS_OUTPUT (N references)
  num   pkts bytes target     prot opt in     out     source               destination
  1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.8
  2        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
@@ -52,8 +52,14 @@ Shell> proxyall      #启动全局代理模式，此模式下将代理所有的�
 ```bash
 
 Shell> iptables -t nat -D OUTPUT -p tcp -j REDSOCKS_OUTPUT
+Shell> iptables -t nat -D PREROUTING -p tcp -j REDSOCKS_PREROUTING
+Shell> iptables -t nat -F REDSOCKS_PREROUTING
+Shell> iptables -t nat -X REDSOCKS_PREROUTING
 Shell> iptables -t nat -F REDSOCKS_OUTPUT
 Shell> iptables -t nat -X REDSOCKS_OUTPUT
+Shell> iptables -t filter -D INPUT -p tcp -j REDSOCKS_INPUT
+Shell> iptables -t filter -F REDSOCKS_INPUT
+Shell> iptables -t filter -X REDSOCKS_INPUT
 Shell> service redsocks stop            #关闭 redsocks 进程
 
 
@@ -67,8 +73,11 @@ Shell> service redsocks stop            #关闭 redsocks 进程
 2. 本机直连路由表中的子网
 3. 兜底：所有 TCP 流量 `REDIRECT` 到 redsocks 监听端口
 
-如需新增直连条目，编辑 `/etc/redsocks/NoProxy.txt` 后重新执行 `proxyall` 即可。
-重复执行时只会清空并重建 `REDSOCKS_OUTPUT`，不会清空 `OUTPUT` 或重复添加引用。升级前由旧版脚本直接写入 `OUTPUT` 的规则不会被自动删除，需要手动清理一次。
+如需新增直连条目，编辑 `/etc/redsocks/NoProxy.txt` 后重新执行 `proxyall` 即可。默认文件已经包含本机、私网、链路本地、组播和保留地址。
+
+脚本还会通过 Docker API 动态读取所有 `bridge` 驱动网络的 IPv4 子网，包括默认 `docker0` 和自定义 bridge。来自这些子网的 TCP 流量通过 nat 表的 `REDSOCKS_PREROUTING` 链进入 `REDSOCKS_OUTPUT`，filter 表的 `REDSOCKS_INPUT` 链负责放行重定向到 redsocks 监听端口的流量。`REDSOCKS_PREROUTING` 的引用会追加到现有 `PREROUTING` 规则之后，让 Docker published ports 等已有 DNAT 规则优先处理。Docker 未安装或 daemon 不可用时会跳过这部分规则，不影响宿主机代理。
+
+重复执行时只会清空并重建三个 `REDSOCKS_*` 自定义链，不会清空系统内置链或重复添加引用。升级前由旧版脚本直接写入 `OUTPUT` 的规则不会被自动删除，需要手动清理一次。
 
 # 运行时文件分布
 

@@ -7,9 +7,15 @@ PIDFile=/run/redsocks.pid
 User=root
 ExecStart=/usr/bin/redsocks -c /etc/redsocks/redsocks.conf -p /run/redsocks.pid
 ExecStopPost=/bin/rm -f /run/redsocks.pid
+ExecStopPost=-/usr/sbin/iptables -t nat -D PREROUTING -p tcp -j REDSOCKS_PREROUTING
+ExecStopPost=-/usr/sbin/iptables -t nat -F REDSOCKS_PREROUTING
+ExecStopPost=-/usr/sbin/iptables -t nat -X REDSOCKS_PREROUTING
 ExecStopPost=-/usr/sbin/iptables -t nat -D OUTPUT -p tcp -j REDSOCKS_OUTPUT
 ExecStopPost=-/usr/sbin/iptables -t nat -F REDSOCKS_OUTPUT
 ExecStopPost=-/usr/sbin/iptables -t nat -X REDSOCKS_OUTPUT
+ExecStopPost=-/usr/sbin/iptables -t filter -D INPUT -p tcp -j REDSOCKS_INPUT
+ExecStopPost=-/usr/sbin/iptables -t filter -F REDSOCKS_INPUT
+ExecStopPost=-/usr/sbin/iptables -t filter -X REDSOCKS_INPUT
 Restart=on-abort
 
 [Install]

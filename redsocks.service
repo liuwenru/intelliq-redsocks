@@ -8,8 +8,9 @@ User=redsocks
 Group=redsocks
 RuntimeDirectory=redsocks
 RuntimeDirectoryMode=0755
-AmbientCapabilities=CAP_NET_ADMIN
-CapabilityBoundingSet=CAP_NET_ADMIN
+# UDP 回包要绑定原始源端口（例如 DNS 53），除透明代理外还需低端口绑定权限。
+AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
 NoNewPrivileges=true
 ExecStart=/usr/bin/redsocks -c /etc/redsocks/redsocks.conf -p /run/redsocks/redsocks.pid
 ExecStopPost=/bin/rm -f /run/redsocks/redsocks.pid

@@ -14,6 +14,7 @@ UDP_OUTPUT_CHAIN="REDSOCKS_UDP_OUTPUT"
 UDP_PREROUTING_CHAIN="REDSOCKS_UDP_PREROUTING"
 UDP_PROXY_CHAIN="REDSOCKS_UDP_PROXY"
 UDP_MARK="0x2333"
+PROXY_BYPASS_MARK="6666"
 UDP_ROUTE_TABLE="10053"
 PROXY_USER="redsocks"
 
@@ -35,6 +36,10 @@ prepare_proxy_chain() {
     ensure_chain mangle "${UDP_OUTPUT_CHAIN}"
     ensure_chain mangle "${UDP_PREROUTING_CHAIN}"
     ensure_chain mangle "${UDP_PROXY_CHAIN}"
+
+    # 本机只放行被重定向的连接；Docker 的必要端口在 load_docker_networks 中精确授权。
+    ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -i lo -p tcp --dport "${PROXY_PORT}" \
+        -m conntrack --ctstate DNAT -j ACCEPT
 
     if ! ${SUDO} iptables -t nat -C OUTPUT -p tcp -j "${PROXY_CHAIN}" >/dev/null 2>&1; then
         ${SUDO} iptables -t nat -A OUTPUT -p tcp -j "${PROXY_CHAIN}"
@@ -90,6 +95,7 @@ load_docker_networks() {
     local network_ids
     local subnet_output
     local subnet
+    local bridge_interface
     local -a network_id_list
 
     if ! command -v docker >/dev/null 2>&1; then
@@ -109,9 +115,19 @@ load_docker_networks() {
 
     while IFS= read -r subnet; do
         [[ -z "${subnet}" || "${subnet}" == *:* ]] && continue
+        bridge_interface=$(ip -o route show to "${subnet}" | awk '$2 == "dev" { print $3; exit }')
+        if [[ -z "${bridge_interface}" || ! -d "/sys/class/net/${bridge_interface}/bridge" ]]; then
+            echo "error: cannot identify Docker bridge interface for ${subnet}; refusing broad INPUT allow" >&2
+            return 1
+        fi
         echo -e "\033[32m docker-proxy: ${subnet}\033[0m"
         ${SUDO} iptables -t nat -A "${PREROUTING_CHAIN}" -s "${subnet}" -p tcp -j "${TCP_PROXY_CHAIN}"
-        ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -s "${subnet}" -p tcp --dport "${PROXY_PORT}" -j ACCEPT
+        # 仅授权网桥接口、源网段和确经 DNAT 的代理连接，不将整个网段加入 ipset。
+        ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -i "${bridge_interface}" -s "${subnet}" \
+            -p tcp --dport "${PROXY_PORT}" -m conntrack --ctstate DNAT -j ACCEPT
+        # Docker 客户端可能自动注入本机 HTTP/SOCKS 代理；只开放该地址的这两个端口。
+        ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -i "${bridge_interface}" -s "${subnet}" \
+            -d "${SOCK_SERVER}" -p tcp -m multiport --dports 1080,7070 -j ACCEPT
         ${SUDO} iptables -t mangle -A "${UDP_PREROUTING_CHAIN}" -s "${subnet}" -p udp -j "${UDP_PROXY_CHAIN}"
     done <<< "${subnet_output}"
 }
@@ -129,7 +145,8 @@ prepare_udp_proxy() {
     ${SUDO} iptables -t mangle -A "${UDP_PREROUTING_CHAIN}" -p udp -m mark --mark "${UDP_MARK}" -j "${UDP_PROXY_CHAIN}"
     # Leave host-bound UDP for Docker published ports and local services.
     ${SUDO} iptables -t mangle -A "${UDP_PREROUTING_CHAIN}" -p udp -m addrtype --dst-type LOCAL -j RETURN
-    ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -p udp -m mark --mark "${UDP_MARK}" -j ACCEPT
+    # TPROXY 保留原始目标端口，不能按监听端口匹配；只放行回环送回的本机 UDP。
+    ${SUDO} iptables -t filter -A "${INPUT_CHAIN}" -i lo -p udp -m mark --mark "${UDP_MARK}" -j ACCEPT
 
     if ! ${SUDO} ip -4 rule show | grep -Eq "fwmark ${UDP_MARK}(/0xffffffff)? .*lookup ${UDP_ROUTE_TABLE}([[:space:]]|$)"; then
         ${SUDO} ip -4 rule add fwmark "${UDP_MARK}" lookup "${UDP_ROUTE_TABLE}"
@@ -138,9 +155,13 @@ prepare_udp_proxy() {
 }
 
 exclude_proxy_process() {
+    # Mihomo 出站使用 routing-mark: 6666，避免上游代理再次进入 redsocks。
+    ${SUDO} iptables -t nat -A "${PROXY_CHAIN}" -p tcp -m mark --mark "${PROXY_BYPASS_MARK}" -j RETURN
     ${SUDO} iptables -t nat -A "${PROXY_CHAIN}" -p tcp -m owner --uid-owner "${PROXY_USER}" -j RETURN
     ${SUDO} iptables -t nat -A "${PROXY_CHAIN}" -p tcp -j "${TCP_PROXY_CHAIN}"
     ${SUDO} iptables -t mangle -I "${UDP_OUTPUT_CHAIN}" 1 -p udp -m owner --uid-owner "${PROXY_USER}" -j RETURN
+    # 必须先绕过，不能让后续 MARK 将 Mihomo 的标记覆盖为 UDP_MARK。
+    ${SUDO} iptables -t mangle -I "${UDP_OUTPUT_CHAIN}" 1 -p udp -m mark --mark "${PROXY_BYPASS_MARK}" -j RETURN
 }
 
 if ! id -u "${PROXY_USER}" >/dev/null 2>&1; then
@@ -149,11 +170,12 @@ if ! id -u "${PROXY_USER}" >/dev/null 2>&1; then
 fi
 
 prepare_proxy_chain
+# 先建立出站绕过，再启用接管，避免启用过程短暂接管 Mihomo 自身流量。
+exclude_proxy_process
 load_no_proxy nat "${TCP_PROXY_CHAIN}" tcp
 load_local_routes nat "${TCP_PROXY_CHAIN}" tcp
 ${SUDO} iptables -t nat -A "${TCP_PROXY_CHAIN}" -p tcp -j REDIRECT --to-ports "${PROXY_PORT}"
 prepare_udp_proxy
-exclude_proxy_process
 load_docker_networks
 
 echo -e "\033[32m iptables OUTPUT chain:\033[0m"

@@ -6,93 +6,72 @@
 
 感谢大神的项目，详细参见[此处 Github 主页](https://github.com/darkk/redsocks)。
 
-# 一、使用方法
+# 二、使用方法
 
-本人已经针对`redsocks`的一个稳定版本编译好了一个直接可以运行的二进制文件，使用`alpine musl gilbc`编译，因此可以不需要安装依赖直接使用，提供了`x86`和`aarch64`两个版本，使用方法如下
+所有文件都留在仓库目录内，不向 `/usr/bin`、`/etc`、systemd 等系统目录安装任何东西。进程启动顺序和配置由 [process-compose](https://github.com/F1bonacc1/process-compose) 编排。仓库内提供 `x86_64` 和 `aarch64` 两个预编译的静态 redsocks（使用 `alpine musl gilbc` 编译，无需安装依赖）。
 
-1. 安装
+依赖：`process-compose`、`iptables`、`iproute2`（`ip`、`ss`）、util-linux 的 `setpriv`，均需 root 执行。
+
+1. 初始化（创建 `redsocks` 系统组，生成 `.env`）
 
 ```bash
-Shell> git clone 本仓库
+Shell> git clone 本仓库 && cd 本仓库
 Shell> ./install.sh
-please tell me you sock_server:127.0.0.1 #输入socket5代理服务器的地址
-please tell me you sock_port:7070        #输入socket5代理服务器的端口
+socks5 server [127.0.0.1]: 192.168.188.8   #输入 socks5 代理服务器的地址
+socks5 port [7070]: 1080                   #输入 socks5 代理服务器的端口
 ```
 
-2. 启动 redsocks
+配置都在仓库根目录的 `.env` 中（模板见 `.env.example`），之后直接编辑即可，不需要重跑 `install.sh`。
+
+2. 启动（必须在仓库根目录执行：process-compose 从当前目录读取 `.env`，进程也在当前目录运行）
 
 ```bash
-Shell > service redsocks start
-
+Shell> process-compose up            # 前台 TUI，可查看各进程日志
+Shell> process-compose up -D         # 或后台运行
+Shell> ./proxyall.sh status          # 查看当前 iptables 规则
 ```
 
-3. 启动全局代理
+process-compose 按以下顺序启动：
+
+| 进程 | 作用 | 依赖 |
+| --- | --- | --- |
+| `render-config` | 根据 `.env` 生成 `run/redsocks.conf` 和 `run/NoProxy.txt` | 无 |
+| `redsocks` | 前台运行 redsocks，TCP/UDP 端口均监听后视为就绪 | `render-config` 成功退出 |
+| `proxy-rules` | 执行 `./proxyall.sh run` 建立 iptables 规则并常驻 | `redsocks` 就绪 |
+
+3. 停止
 
 ```bash
-Shell> proxyall      #启动全局代理模式，此模式下将代理所有的访问
-
- iptables OUTPUT chain:
- Chain OUTPUT (policy ACCEPT 0 packets, 0 bytes)
- num   pkts bytes target     prot opt in     out     source               destination
- 1        0     0 REDSOCKS_OUTPUT tcp -- *    *       0.0.0.0/0            0.0.0.0/0
-
- iptables REDSOCKS_OUTPUT chain:
- Chain REDSOCKS_OUTPUT (1 references)
- num   pkts bytes target     prot opt in     out     source               destination
- 1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            owner UID match redsocks
- 2        0     0 REDSOCKS_TCP tcp --  *      *       0.0.0.0/0            0.0.0.0/0
-
- iptables REDSOCKS_TCP chain:
- Chain REDSOCKS_TCP (N references)
- num   pkts bytes target     prot opt in     out     source               destination
- 1        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.8
- 2        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            127.0.0.1
- 3        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.0.0/16
- 4        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            172.16.0.0/16
- 5        0     0 RETURN     tcp  --  *      *       0.0.0.0/0            192.168.188.0/24
- 6        0     0 REDIRECT   tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            redir ports 12345
+Shell> process-compose down          # 或在 TUI 中退出
 ```
 
-4. 清理代理与关闭代理
+`ordered_shutdown` 保证先停止 `proxy-rules`（收到 SIGTERM 后清理全部规则和策略路由），再停止 redsocks。各进程日志在 `run/<进程名>.log`。若 process-compose 被强杀导致规则残留，执行 `./proxyall.sh down` 手动清理，该命令可重复执行。
+
+`proxyall.sh` 也可以单独使用：`up` 建立规则、`down` 清理规则、`status` 查看规则、`run` 建立后常驻并在退出时清理。
+
+## 从旧版系统安装迁移
+
+旧版会安装 `/usr/bin/redsocks`、`/etc/redsocks/`、`/usr/local/bin/proxyall` 和 `redsocks.service`。新旧版本不能同时运行，迁移步骤：
 
 ```bash
-
-Shell> iptables -t nat -D OUTPUT -p tcp -j REDSOCKS_OUTPUT
-Shell> iptables -t nat -D PREROUTING -p tcp -j REDSOCKS_PREROUTING
-Shell> iptables -t nat -F REDSOCKS_PREROUTING
-Shell> iptables -t nat -X REDSOCKS_PREROUTING
-Shell> iptables -t nat -F REDSOCKS_OUTPUT
-Shell> iptables -t nat -X REDSOCKS_OUTPUT
-Shell> iptables -t nat -F REDSOCKS_TCP
-Shell> iptables -t nat -X REDSOCKS_TCP
-Shell> iptables -t filter -D INPUT -p tcp -j REDSOCKS_INPUT
-Shell> iptables -t filter -D INPUT -p udp -j REDSOCKS_INPUT
-Shell> iptables -t filter -F REDSOCKS_INPUT
-Shell> iptables -t filter -X REDSOCKS_INPUT
-Shell> iptables -t mangle -D OUTPUT -p udp -j REDSOCKS_UDP_OUTPUT
-Shell> iptables -t mangle -D PREROUTING -p udp -j REDSOCKS_UDP_PREROUTING
-Shell> iptables -t mangle -F REDSOCKS_UDP_OUTPUT
-Shell> iptables -t mangle -X REDSOCKS_UDP_OUTPUT
-Shell> iptables -t mangle -F REDSOCKS_UDP_PREROUTING
-Shell> iptables -t mangle -X REDSOCKS_UDP_PREROUTING
-Shell> iptables -t mangle -F REDSOCKS_UDP_PROXY
-Shell> iptables -t mangle -X REDSOCKS_UDP_PROXY
-Shell> ip -4 rule del fwmark 0x2333 lookup 10053
-Shell> ip -4 route del local 0.0.0.0/0 dev lo table 10053
-Shell> service redsocks stop            #关闭 redsocks 进程
-
-
+Shell> systemctl disable --now redsocks      # ExecStopPost 会清理旧规则
+Shell> rm -f /etc/systemd/system/redsocks.service /usr/local/bin/proxyall /usr/bin/redsocks
+Shell> systemctl daemon-reload
+Shell> rm -rf /etc/redsocks                  # 自定义直连条目先移到仓库的 NoProxy.local.txt
+Shell> ./install.sh                          # 会读取旧的 proxyserverinfo 作为默认上游
 ```
+
+旧版按用户（`--uid-owner redsocks`）排除自身流量，新版按组（`--gid-owner redsocks`）排除。已有的 `redsocks` 用户可以保留，不再使用。
 
 # 关于代理范围
 
 `proxyall` 会在 iptables nat 表中创建 OUTPUT 专用链 `REDSOCKS_OUTPUT` 和通用链 `REDSOCKS_TCP`。`REDSOCKS_OUTPUT` 先排除 redsocks 进程自身流量，再进入 `REDSOCKS_TCP`。代理规则按以下顺序写入 `REDSOCKS_TCP`：
 
-1. `/etc/redsocks/NoProxy.txt` 中列出的 IP/CIDR（由 `install.sh` 自动写入，第一行为 SOCK_SERVER）
+1. `run/NoProxy.txt` 中列出的 IP/CIDR（每次启动由 `render-config` 生成：第一行为 SOCK_SERVER，之后是仓库的 `NoProxy.txt` 和可选的 `NoProxy.local.txt`）
 2. 本机直连路由表中的子网
 3. 兜底：所有 TCP 流量 `REDIRECT` 到 redsocks 监听端口
 
-如需新增直连条目，编辑 `/etc/redsocks/NoProxy.txt` 后重新执行 `proxyall` 即可。默认文件已经包含本机、私网、链路本地、组播和保留地址。
+如需新增直连条目，通用条目写入 `NoProxy.txt`，本机专属条目写入 `NoProxy.local.txt`（不入库），然后重启 process-compose（或执行 `scripts/render-config.sh && ./proxyall.sh up`）。不要直接编辑 `run/` 下的生成文件。默认文件已经包含本机、私网、链路本地、组播和保留地址。
 
 脚本还会通过 Docker API 动态读取所有 `bridge` 驱动网络的 IPv4 子网，包括默认 `docker0` 和自定义 bridge，不会写死 Docker 地址池。来自这些子网的 TCP 流量通过 nat 表的 `REDSOCKS_PREROUTING` 链进入 `REDSOCKS_TCP`。filter 表的 `REDSOCKS_INPUT` 链放行回环接口上的本机透明代理流量，并对 Docker 仅精确授权：匹配实际网桥入接口和源网段后，允许确经 DNAT 到 redsocks 端口的 TCP，以及访问 `SOCK_SERVER` 地址 TCP 1080/7070 的显式代理连接。不会将整个 Docker 网段加入 ipset，其他服务仍按原有 INPUT/ipset 策略判断；无法确定网桥接口时明确报错，不退化为宽泛放行。OUTPUT 专用的 owner 规则不会出现在 PREROUTING 路径中，兼容 iptables 的 nf_tables 后端。`REDSOCKS_PREROUTING` 的引用会追加到现有 `PREROUTING` 规则之后，让 Docker published ports 等已有 DNAT 规则优先处理。Docker 未安装或 daemon 不可用时会跳过这部分规则，不影响宿主机代理。
 
@@ -102,11 +81,11 @@ Shell> service redsocks stop            #关闭 redsocks 进程
 
 `192.168.188.150` 和 `192.168.188.8` 可以共用上游地址 `192.168.188.8:7070`，无需将后者改成 `127.0.0.1`。但在 `188.8` 上启用透明代理前，必须先让两个 Mihomo 实例的出站绕过接管，否则节点连接、DIRECT 和 DNS 流量可能再次进入 redsocks，形成循环。
 
-在两个 Mihomo 配置的顶层设置 `routing-mark: 6666`。若通过 Docker 运行，为对应服务增加 `cap_add: [NET_ADMIN]` 并重建容器，使权限生效；无需启用 privileged。脚本会在 TCP 重定向和 UDP 标记前放过 `6666`（十六进制 `0x1a0a`），同时保留 redsocks 用户绕过规则。该标记需专用于代理出站，不要用于其他需要透明代理的程序。
+在两个 Mihomo 配置的顶层设置 `routing-mark: 6666`。若通过 Docker 运行，为对应服务增加 `cap_add: [NET_ADMIN]` 并重建容器，使权限生效；无需启用 privileged。脚本会在 TCP 重定向和 UDP 标记前放过 `6666`（十六进制 `0x1a0a`），同时保留 redsocks 组绕过规则。该标记需专用于代理出站，不要用于其他需要透明代理的程序。
 
 先验证 Mihomo 标记设置没有权限错误、HTTP/SOCKS 及 DNS 服务正常，再安装和启用 redsocks 规则。宿主机 INPUT 若有 DROP 规则，还需确认回环接口上的本机代理连接被允许。不要排除整个 root 用户，也不要只依赖代理节点 IP 白名单。
 
-修改仓库中的 `proxyall.sh` 不会自动更新已安装的 `/usr/local/bin/proxyall`；应用时需同步脚本并替换 `SED_*` 占位符。重新运行 `install.sh` 会覆盖 redsocks 配置及直连列表，已有安装不要为更新脚本直接重跑安装。
+脚本和配置都直接从仓库目录运行，修改后重启 process-compose 即可生效。`install.sh` 不会覆盖已有的 `.env`。
 
 **统一 DNS 与直连约定：** 三台主机的唯一默认上游均为 `192.168.188.8:53`（Mihomo），不将公网 DNS 混入系统备用解析器。`223.5.5.5`、`114.114.114.114` 同时保留在仓库和运行时 `NoProxy.txt`，保持这两个 IP 的所有 TCP/UDP 流量直连，保护显式查询及引导解析。保留统一的 `proxyall` 入口，不增加 TCP-only 参数。188.8 本机的 redudp 若代理其他外部 UDP DNS，回包绑定 `IP:53` 仍会与 Mihomo 通配监听冲突。
 
@@ -155,9 +134,9 @@ docker run --rm \
 
 # UDP 代理
 
-`proxyall` 使用 redsocks `redudp`、iptables `TPROXY` 和策略路由代理宿主机及所有 Docker bridge 网络的 IPv4 UDP 流量。UDP 监听地址为 `127.0.0.1:10053`，SOCKS5 服务必须支持 UDP ASSOCIATE；OpenSSH `ssh -D` 不支持这种 UDP 转发。
+`proxyall` 使用 redsocks `redudp`、iptables `TPROXY` 和策略路由代理宿主机及所有 Docker bridge 网络的 IPv4 UDP 流量。TPROXY 目标为 `127.0.0.1:10053`，SOCKS5 服务必须支持 UDP ASSOCIATE；OpenSSH `ssh -D` 不支持这种 UDP 转发。
 
-安装时会创建专用系统用户 `redsocks`，systemd 向进程授予透明 UDP 所需的 `CAP_NET_ADMIN`，以及回送 DNS 等低源端口 UDP 响应所需的 `CAP_NET_BIND_SERVICE`；否则回包绑定原始源端口时会报 Permission denied。OUTPUT 规则会按进程 owner 排除 redsocks 自己发出的 TCP 和 UDP，避免 SOCKS5 UDP relay 地址与控制连接地址不同时形成代理循环。
+redsocks 由 `scripts/run-redsocks.sh` 通过 `setpriv` 启动：保持 uid 0（仓库可能位于 `/root` 下，其他用户无法读取），切换到 `redsocks` 组，并把能力集收缩为透明 UDP 所需的 `CAP_NET_ADMIN`，以及回送 DNS 等低源端口 UDP 响应所需的 `CAP_NET_BIND_SERVICE`；缺少后者时回包绑定原始源端口会报 Permission denied。OUTPUT 规则按进程所属组（`--gid-owner redsocks`）排除 redsocks 自己发出的 TCP 和 UDP，避免 SOCKS5 UDP relay 地址与控制连接地址不同时形成代理循环。
 
 脚本使用 fwmark `0x2333` 和路由表 `10053`，并维护以下 mangle 链：
 
@@ -171,18 +150,22 @@ docker run --rm \
 
 通配监听冲突不限于 DNS 53：188.150 的 Avahi 监听 UDP 5353，实测 redudp 绑定 `208.67.222.222:5353` 回包也报 `EADDRINUSE`。这不影响默认 Mihomo DNS 或已通过的 UDP NTP，但不能宣称所有 UDP 目标端口均可代理；不要为了测试停止现有服务或擅自放宽规则。
 
-# 运行时文件分布
+# 文件说明
 
 ```
-/etc/redsocks/
-├── redsocks.conf          # redsocks 配置文件
-├── NoProxy.txt            # 直连 IP/CIDR 列表（第一行是 SOCK_SERVER）
-└── proxyserverinfo        # 上次安装时的 SOCK_SERVER:SOCK_PORT 记录
-
-/etc/systemd/system/redsocks.service   # systemd unit 文件
-/run/redsocks/redsocks.pid              # redsocks 进程 PID 文件
-/usr/bin/redsocks                       # redsocks 二进制
-/usr/local/bin/proxyall                 # 全局代理快捷命令
+.env                    # 本机配置（不入库，模板 .env.example）
+NoProxy.txt             # 通用直连 IP/CIDR 列表
+NoProxy.local.txt       # 可选，本机专属直连条目（不入库）
+process-compose.yaml    # 进程编排：启动顺序、就绪探针、停止顺序
+proxyall.sh             # iptables 规则 up/down/status/run
+redsocks.conf.tmpl      # redsocks 配置模板，@VAR@ 占位符由 .env 替换
+redsocks_x86_64 / redsocks_aarch64
+scripts/
+├── env.sh              # 加载 .env、默认值和校验，被其他脚本 source
+├── render-config.sh    # 生成 run/ 下的配置
+├── run-redsocks.sh     # setpriv 降权后前台运行 redsocks
+└── check-redsocks.sh   # 就绪探针
+run/                    # 生成文件（不入库）：redsocks.conf、NoProxy.txt
 ```
 
 # 静态编译方法

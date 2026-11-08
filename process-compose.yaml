@@ -1,0 +1,48 @@
+# 启动顺序：render-config（生成 run/ 下的配置）→ redsocks（端口就绪）→ proxy-rules（建立 iptables 规则）
+# 停止顺序（ordered_shutdown）：proxy-rules 先清理规则，再停止 redsocks，避免流量被重定向到已停止的端口。
+# 配置来自仓库根目录的 .env（process-compose 自动加载），参见 .env.example。
+# 必须在仓库根目录以 root 执行：process-compose up
+version: "0.5"
+is_strict: true
+ordered_shutdown: true
+
+processes:
+  render-config:
+    log_location: ./run/render-config.log
+    command: ./scripts/render-config.sh
+    availability:
+      restart: exit_on_failure
+
+  redsocks:
+    log_location: ./run/redsocks.log
+    command: ./scripts/run-redsocks.sh
+    depends_on:
+      render-config:
+        condition: process_completed_successfully
+    readiness_probe:
+      exec:
+        command: ./scripts/check-redsocks.sh
+      initial_delay_seconds: 1
+      period_seconds: 2
+      timeout_seconds: 2
+      failure_threshold: 5
+    availability:
+      restart: on_failure
+      backoff_seconds: 2
+      max_restarts: 5
+    shutdown:
+      signal: 15
+      timeout_seconds: 10
+
+  proxy-rules:
+    log_location: ./run/proxy-rules.log
+    command: ./proxyall.sh run
+    depends_on:
+      redsocks:
+        condition: process_healthy
+    availability:
+      # 规则建立失败（例如找不到 Docker 网桥接口）时整体退出，不留下半套规则。
+      restart: exit_on_failure
+    shutdown:
+      signal: 15
+      timeout_seconds: 30

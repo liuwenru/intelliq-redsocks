@@ -15,6 +15,7 @@ base {
 	// log = "syslog:local7";
 
 	// detach from console
+	// process-compose 管理前台进程，必须保持 off。
 	daemon = off;
 
 	/* Change uid, gid and root directory, these options require root
@@ -41,7 +42,7 @@ redsocks {
 	 * `local_*' are used as port to redirect to.
 	 */
 	local_ip = 0.0.0.0;
-	local_port = 12345;
+	local_port = @PROXY_PORT@;
 
 	// listen() queue length. Default value is SOMAXCONN and it should be
 	// good enough for most of us.
@@ -58,8 +59,8 @@ redsocks {
 	// `ip' and `port' are IP and tcp-port of proxy-server
 	// You can also use hostname instead of IP, only one (random)
 	// address of multihomed host will be used.
-	ip = example.org;
-	port = 1080;
+	ip = @SOCK_SERVER@;
+	port = @SOCK_PORT@;
 
 
 	// known types: socks4, socks5, http-connect, http-relay
@@ -74,11 +75,11 @@ redudp {
 	// packets that are sent as replies - and it should be fixed
 	// if we want NAT to work properly.
 	local_ip = 0.0.0.0;
-	local_port = SED_UDP_PROXY_PORT;
+	local_port = @UDP_PROXY_PORT@;
 
 	// `ip' and `port' of socks5 proxy server.
-	ip = SED_SOCK_SERVER;
-	port = SED_SOCK_PORT;
+	ip = @SOCK_SERVER@;
+	port = @SOCK_PORT@;
 	// login = username;
 	// password = pazzw0rd;
 
@@ -91,14 +92,6 @@ redudp {
 
 	udp_timeout = 30;
 	udp_timeout_stream = 180;
-}
-
-dnstc {
-	// fake and really dumb DNS server that returns "truncated answer" to
-	// every query via UDP, RFC-compliant resolver should repeat same query
-	// via TCP in this case.
-	local_ip = 127.0.0.1;
-	local_port = 5300;
 }
 
 // you can add more `redsocks' and `redudp' sections if you need.

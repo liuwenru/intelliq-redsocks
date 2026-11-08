@@ -1,2 +1,6 @@
 redsocks.conf
 proxyserverinfo
+.env
+NoProxy.local.txt
+run/
+*.log
